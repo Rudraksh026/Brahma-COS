@@ -1,0 +1,9 @@
+{
+  "/(workspace)/dashboard/page": "app/(workspace)/dashboard/page.js",
+  "/(workspace)/tasks/page": "app/(workspace)/tasks/page.js",
+  "/(workspace)/tasks/[id]/page": "app/(workspace)/tasks/[id]/page.js",
+  "/(workspace)/decisions/page": "app/(workspace)/decisions/page.js",
+  "/(workspace)/memory/page": "app/(workspace)/memory/page.js",
+  "/(workspace)/agents/page": "app/(workspace)/agents/page.js",
+  "/(workspace)/audit/page": "app/(workspace)/audit/page.js"
+}
