@@ -5,19 +5,32 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function formatDateTime(value: string) {
+export function formatDateTime(value?: string) {
+  if (!value) return "-";
+
+  const date = new Date(value);
+
+  if (isNaN(date.getTime())) return "-";
+
   return new Intl.DateTimeFormat("en", {
     month: "short",
     day: "2-digit",
+    year: "numeric",
     hour: "2-digit",
-    minute: "2-digit"
-  }).format(new Date(value));
+    minute: "2-digit",
+  }).format(date);
 }
 
-export function formatDate(value: string) {
+export function formatDate(value?: string) {
+  if (!value) return "-";
+
+  const date = new Date(value);
+
+  if (isNaN(date.getTime())) return "-";
+
   return new Intl.DateTimeFormat("en", {
     month: "short",
     day: "2-digit",
-    year: "numeric"
-  }).format(new Date(value));
+    year: "numeric",
+  }).format(date);
 }

@@ -1,74 +1,71 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, Clock, FileText, Search } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
+import { ArrowLeft, Clock, FileText } from "lucide-react";
 
-import { EmptyState } from "@/components/common/empty-state";
+import api from "@/lib/api";
+
 import { PageHeader } from "@/components/common/page-header";
-import { RiskBadge } from "@/components/common/risk-badge";
-import { RiskReview } from "@/components/common/risk-review";
 import { StatusBadge } from "@/components/common/status-badge";
-import { AgentTimeline } from "@/components/tasks/agent-timeline";
+import { RiskBadge } from "@/components/common/risk-badge";
+
 import { Button } from "@/components/ui/button";
 import {
   Card,
-  CardContent,
-  CardDescription,
   CardHeader,
-  CardTitle
+  CardTitle,
+  CardDescription,
+  CardContent,
 } from "@/components/ui/card";
-import type { Task } from "@/lib/types";
-import { formatDateTime } from "@/lib/utils";
 
-const storageKey = "brahma-cos-local-tasks";
+import { formatDateTime } from "@/lib/utils";
+import type { Task } from "@/lib/types";
 
 export function TaskDetailView({
-  initialTasks,
-  taskId
+  taskId,
 }: {
-  initialTasks: Task[];
   taskId: string;
 }) {
-  const [localTasks, setLocalTasks] = useState<Task[]>([]);
+  const [task, setTask] = useState<Task | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const raw = window.localStorage.getItem(storageKey);
-    if (!raw) {
-      return;
-    }
-
-    try {
-      setLocalTasks(JSON.parse(raw) as Task[]);
-    } catch {
-      setLocalTasks([]);
-    }
+    loadTask();
   }, []);
 
-  const task = useMemo(
-    () => [...localTasks, ...initialTasks].find((item) => item.id === taskId),
-    [initialTasks, localTasks, taskId]
-  );
+  async function loadTask() {
+    try {
+      const res = await api.get("/tasks/");
+      const found = res.data.find(
+        (t: Task) => String(t.id) === taskId
+      );
+      setTask(found ?? null);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (loading) {
+    return <div className="p-8">Loading...</div>;
+  }
 
   if (!task) {
     return (
       <div className="space-y-6">
         <PageHeader
+          title="Task Not Found"
+          description="Task doesn't exist."
           action={
             <Button asChild variant="outline">
               <Link href="/tasks">
-                <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-                Back to tasks
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Back
               </Link>
             </Button>
           }
-          description="This task is not available in mock data or local browser state."
-          title="Task not found"
-        />
-        <EmptyState
-          description="Return to the task console and open an existing task."
-          icon={Search}
-          title="No task detail available"
         />
       </div>
     );
@@ -76,125 +73,236 @@ export function TaskDetailView({
 
   return (
     <div className="space-y-6">
+
       <PageHeader
+        title={task.title}
+        description={task.prompt}
         action={
           <Button asChild variant="outline">
             <Link href="/tasks">
-              <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-              Back to tasks
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back
             </Link>
           </Button>
         }
-        description={task.description}
-        title={task.title}
       />
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Agent Execution Timeline</CardTitle>
-              <CardDescription>
-                Visual representation only. No LangGraph execution is connected.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <AgentTimeline trace={task.trace} />
-            </CardContent>
-          </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>Task Information</CardTitle>
+        </CardHeader>
 
-          {task.riskReport ? <RiskReview report={task.riskReport} /> : null}
-        </div>
+        <CardContent className="space-y-4">
 
-        <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Task Information</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex flex-wrap gap-2">
-                <StatusBadge status={task.status} />
-                <RiskBadge level={task.riskLevel} />
-              </div>
-              <InfoRow label="Current agent" value={task.currentAgent} />
-              <InfoRow label="Current stage" value={task.currentStage} />
-              <InfoRow label="Created" value={formatDateTime(task.createdAt)} />
-              <InfoRow label="Updated" value={formatDateTime(task.updatedAt)} />
-              {task.executionResult ? (
-                <div className="rounded-md border bg-muted/45 p-4">
-                  <div className="flex items-center gap-2 text-sm font-medium">
-                    <FileText className="h-4 w-4" aria-hidden="true" />
-                    Execution result
-                  </div>
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    {task.executionResult}
-                  </p>
-                </div>
-              ) : null}
-              {task.errors?.length ? (
-                <div className="rounded-md border border-red-200 bg-red-50 p-4">
-                  <p className="text-sm font-medium text-red-700">Errors</p>
-                  <ul className="mt-2 space-y-1 text-sm text-red-700">
-                    {task.errors.map((error) => (
-                      <li key={error}>{error}</li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
-            </CardContent>
-          </Card>
+          <div className="flex gap-2">
+            <StatusBadge status={task.status} />
+            <RiskBadge level={task.risk_level} />
+          </div>
 
-          {task.plan ? (
-            <Card>
-              <CardHeader>
-                <CardTitle>PRAGYA Plan</CardTitle>
-                <CardDescription>{task.plan.summary}</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <p className="text-xs font-semibold uppercase text-muted-foreground">
-                    Steps
-                  </p>
-                  <ol className="mt-2 space-y-2 text-sm text-muted-foreground">
-                    {task.plan.steps.map((step, index) => (
-                      <li className="flex gap-2" key={step}>
-                        <span className="font-medium text-foreground">
-                          {index + 1}.
-                        </span>
-                        <span>{step}</span>
-                      </li>
-                    ))}
-                  </ol>
-                </div>
-                <div>
-                  <p className="text-xs font-semibold uppercase text-muted-foreground">
-                    Assumptions
-                  </p>
-                  <ul className="mt-2 space-y-2 text-sm text-muted-foreground">
-                    {task.plan.assumptions.map((assumption) => (
-                      <li className="flex gap-2" key={assumption}>
-                        <Clock className="mt-0.5 h-4 w-4 shrink-0" />
-                        <span>{assumption}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </CardContent>
-            </Card>
-          ) : null}
-        </div>
-      </div>
+          <InfoRow
+            label="Created"
+            value={formatDateTime(task.created_at)}
+          />
+
+          {task.updated_at && (
+            <InfoRow
+              label="Updated"
+              value={formatDateTime(task.updated_at)}
+            />
+          )}
+
+        </CardContent>
+      </Card>
+
+      {task.plan && (
+        <Card>
+          <CardHeader>
+            <CardTitle>PRAGYA PLAN</CardTitle>
+            <CardDescription>
+              {task.plan.summary}
+            </CardDescription>
+          </CardHeader>
+
+          <CardContent>
+
+            <h4 className="font-semibold mb-2">
+              Steps
+            </h4>
+
+            <ol className="list-decimal ml-5 space-y-2">
+              {task.plan.steps.map((step) => (
+                <li key={step}>{step}</li>
+              ))}
+            </ol>
+
+            <h4 className="font-semibold mt-6 mb-2">
+              Tools Needed
+            </h4>
+
+            <ul className="list-disc ml-5 space-y-1">
+              {task.plan.tools_needed.map((tool) => (
+                <li key={tool}>{tool}</li>
+              ))}
+            </ul>
+
+            <h4 className="font-semibold mt-6 mb-2">
+              Assumptions
+            </h4>
+
+            <ul className="space-y-2">
+              {task.plan.assumptions.map((item) => (
+                <li
+                  key={item}
+                  className="flex items-center gap-2"
+                >
+                  <Clock className="h-4 w-4" />
+                  {item}
+                </li>
+              ))}
+            </ul>
+
+          </CardContent>
+        </Card>
+      )}
+
+      {task.risk_report && (
+        <Card>
+          <CardHeader>
+            <CardTitle>MURPHY Risk Report</CardTitle>
+          </CardHeader>
+
+          <CardContent className="space-y-4">
+
+            <InfoRow
+              label="Risk Level"
+              value={task.risk_report.risk_level}
+            />
+
+            <div>
+              <h4 className="font-semibold">
+                Failure Modes
+              </h4>
+
+              <ul className="list-disc ml-5">
+                {task.risk_report.failure_modes.map((x) => (
+                  <li key={x}>{x}</li>
+                ))}
+              </ul>
+            </div>
+
+            <div>
+              <h4 className="font-semibold">
+                Security Concerns
+              </h4>
+
+              <ul className="list-disc ml-5">
+                {task.risk_report.security_concerns.map((x) => (
+                  <li key={x}>{x}</li>
+                ))}
+              </ul>
+            </div>
+
+            <InfoRow
+              label="Recommendation"
+              value={task.risk_report.recommendation}
+            />
+
+          </CardContent>
+        </Card>
+      )}
+
+      {task.policy_verdict && (
+        <Card>
+          <CardHeader>
+            <CardTitle>MARYADA Verdict</CardTitle>
+          </CardHeader>
+
+          <CardContent className="space-y-3">
+
+            <InfoRow
+              label="Risk Tier"
+              value={task.policy_verdict.risk_tier}
+            />
+
+            <InfoRow
+              label="Approved"
+              value={
+                task.policy_verdict.approved
+                  ? "YES"
+                  : "NO"
+              }
+            />
+
+            <InfoRow
+              label="Human Review"
+              value={
+                task.policy_verdict.requires_human
+                  ? "Required"
+                  : "Not Required"
+              }
+            />
+
+            <InfoRow
+              label="Justification"
+              value={task.policy_verdict.justification}
+            />
+
+          </CardContent>
+        </Card>
+      )}
+
+      {task.execution_result && (
+        <Card>
+          <CardHeader>
+            <CardTitle>RACHIT Execution</CardTitle>
+          </CardHeader>
+
+          <CardContent>
+
+            <div className="flex gap-2 items-center">
+              <FileText className="h-4 w-4" />
+
+              <span>
+                {task.execution_result.message}
+              </span>
+            </div>
+
+            <div className="mt-4">
+              <InfoRow
+                label="Status"
+                value={task.execution_result.status}
+              />
+
+              <InfoRow
+                label="Executed Steps"
+                value={String(task.execution_result.executed_steps)}
+              />
+            </div>
+
+          </CardContent>
+        </Card>
+      )}
+
     </div>
   );
 }
 
-function InfoRow({ label, value }: { label: string; value: string }) {
+function InfoRow({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
   return (
     <div>
       <p className="text-xs font-semibold uppercase text-muted-foreground">
         {label}
       </p>
-      <p className="mt-1 text-sm">{value}</p>
+
+      <p className="mt-1 text-sm">
+        {value}
+      </p>
     </div>
   );
 }

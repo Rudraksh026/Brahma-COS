@@ -1,87 +1,42 @@
 import { Badge } from "@/components/ui/badge";
-import type {
-  AgentHealth,
-  AgentOperationalStatus,
-  ApprovalStatus,
-  AuditStatus,
-  MemoryStatus,
-  WorkflowStatus
-} from "@/lib/types";
+import type { WorkflowStatus } from "@/lib/types";
 
 const workflowLabels: Record<WorkflowStatus, string> = {
-  pending: "Pending",
-  running: "Running",
-  completed: "Completed",
-  failed: "Failed",
-  blocked: "Blocked",
-  waiting_approval: "Waiting approval"
+  PENDING: "Pending",
+  RUNNING: "Running",
+  COMPLETED: "Completed",
+  FAILED: "Failed",
+  BLOCKED: "Blocked",
 };
 
 function variantForStatus(
-  status:
-    | WorkflowStatus
-    | ApprovalStatus
-    | MemoryStatus
-    | AgentOperationalStatus
-    | AgentHealth
-    | AuditStatus
-) {
-  if (
-    status === "completed" ||
-    status === "approved" ||
-    status === "Approved" ||
-    status === "Canonical" ||
-    status === "active" ||
-    status === "healthy" ||
-    status === "success"
-  ) {
-    return "success" as const;
-  }
+  status: WorkflowStatus
+): "success" | "warning" | "danger" | "secondary" {
+  switch (status) {
+    case "COMPLETED":
+      return "success";
 
-  if (
-    status === "running" ||
-    status === "waiting_approval" ||
-    status === "pending" ||
-    status === "Candidate" ||
-    status === "idle" ||
-    status === "degraded" ||
-    status === "warning"
-  ) {
-    return "warning" as const;
-  }
+    case "RUNNING":
+      return "warning";
 
-  if (
-    status === "failed" ||
-    status === "blocked" ||
-    status === "rejected" ||
-    status === "Deprecated" ||
-    status === "offline"
-  ) {
-    return "danger" as const;
-  }
+    case "FAILED":
+    case "BLOCKED":
+      return "danger";
 
-  return "secondary" as const;
+    case "PENDING":
+    default:
+      return "secondary";
+  }
 }
 
 export function StatusBadge({
-  status
+  status,
 }: {
-  status:
-    | WorkflowStatus
-    | ApprovalStatus
-    | MemoryStatus
-    | AgentOperationalStatus
-    | AgentHealth
-    | AuditStatus;
+  status: WorkflowStatus;
 }) {
-  const label =
-    status in workflowLabels
-      ? workflowLabels[status as WorkflowStatus]
-      : String(status).replace("_", " ");
-
   return (
-    <Badge variant={variantForStatus(status)} className="capitalize">
-      {label}
+    <Badge variant={variantForStatus(status)}>
+      {workflowLabels[status]}
     </Badge>
   );
 }

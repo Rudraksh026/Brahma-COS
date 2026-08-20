@@ -5,17 +5,25 @@ const riskVariants: Record<
   RiskLevel,
   "success" | "warning" | "danger" | "secondary"
 > = {
-  low: "success",
-  medium: "warning",
-  high: "danger",
-  critical: "danger"
+  LOW: "success",
+  MEDIUM: "warning",
+  HIGH: "danger",
+  CRITICAL: "danger",
 };
 
-export function RiskBadge({ level }: { level: RiskLevel }) {
+export function RiskBadge({
+  level,
+}: {
+  level: RiskLevel;
+}) {
   return (
     <Badge
       variant={riskVariants[level]}
-      className={level === "critical" ? "border-red-300 bg-red-100" : ""}
+      className={
+        level === "CRITICAL"
+          ? "border-red-300 bg-red-100"
+          : ""
+      }
     >
       {level}
     </Badge>
