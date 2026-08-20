@@ -1,110 +1,53 @@
-import os
 import json
 from typing import Dict, Any
-
-from dotenv import load_dotenv
 from litellm import completion
-
 from ..state import AgentState, PragyaPlan
 
-load_dotenv()
-
-MODEL = os.getenv("LLM_MODEL", "llama3.2:3b")
-API_BASE = os.getenv("OLLAMA_API_BASE", "http://localhost:11434")
-
+MODEL = "ollama/llama3.2:3b" # Can be configured via env later
 
 def pragya_node(state: AgentState) -> Dict[str, Any]:
-    print("[PRAGYA] Reasoning over intent...")
-
-    print("MODEL =", MODEL)
-    print("API_BASE =", API_BASE)
-
+    print(f"[PRAGYA] Reasoning over intent...")
     intent = state.get("intent", "")
-    knowledge = state.get("knowledge", [])
-
-    print("Retrieved Knowledge:", knowledge)
-
-    system_prompt = """
-You are PRAGYA, the planning agent of BRAHMA COS.
-
-Create a plan for the given user request.
-
-Return ONLY a valid JSON object in exactly this format:
-
-{
-  "summary": "short summary",
-  "steps": [
-    "step 1",
-    "step 2"
-  ],
-  "tools_needed": [
-    "tool 1"
-  ],
-  "assumptions": [
-    "assumption 1"
-  ]
-}
-
-Do not use markdown.
-Do not use ```json.
-Do not explain anything.
-Return only the JSON object.
+    
+    system_prompt = f"""You are PRAGYA, the core reasoning agent of BRAHMA COS.
+Your goal is to formulate a structured plan to address the user's intent.
+You MUST respond with valid JSON matching this schema:
+{PragyaPlan.model_json_schema()}
+Do not include any other text, markdown blocks, or chain-of-thought in your response, ONLY the raw JSON object.
 """
-
+    
     try:
-
         response = completion(
             model=MODEL,
-            api_base=API_BASE,
-            response_format={"type": "json_object"},
             messages=[
-                {
-                    "role": "system",
-                    "content": system_prompt,
-                },
-                {
-                    "role": "user",
-                    "content": f"""
-                Intent:
-                {intent}
-
-                Relevant Knowledge:
-                {json.dumps(knowledge, indent=2)}
-                """,
-                    },
-                ],
-        )
-
-        content = response.choices[0].message.content
-
-        print("========== RAW RESPONSE ==========")
-        print(content)
-        print("==================================")
-
-        plan_obj = PragyaPlan.model_validate_json(content)
-
-        return {
-            "current_agent": "PRAGYA",
-            "plan": plan_obj.model_dump(),
-        }
-
-    except Exception as e:
-
-        print("[PRAGYA] Error:", str(e))
-
-        fallback = PragyaPlan(
-            summary="Fallback plan generated.",
-            steps=[
-                "Manual review required."
-            ],
-            tools_needed=[],
-            assumptions=[
-                "LLM response could not be parsed."
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": intent}
             ]
         )
-
+        content = response.choices[0].message.content
+        
+        # Strip markdown if present
+        if content.startswith("```json"):
+            content = content[7:-3]
+        elif content.startswith("```"):
+            content = content[3:-3]
+            
+        plan_obj = PragyaPlan.model_validate_json(content.strip())
         return {
             "current_agent": "PRAGYA",
-            "plan": fallback.model_dump(),
-            "errors": state.get("errors", []) + [str(e)],
+            "plan": plan_obj.model_dump()
+        }
+    except Exception as e:
+        print(f"[PRAGYA] Error generating plan: {str(e)}")
+        # Safe failure
+        fallback_plan = PragyaPlan(
+            summary="Fallback plan generated due to LLM failure.",
+            steps=["Manual review required"],
+            tools_needed=[],
+            assumptions=["System encountered an error during planning."]
+        )
+        return {
+            "current_agent": "PRAGYA",
+            "plan": fallback_plan.model_dump(),
+            "errors": state.get("errors", []) + [f"PRAGYA Error: {str(e)}"]
         }

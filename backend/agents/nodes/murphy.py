@@ -1,106 +1,54 @@
-import os
 import json
 from typing import Dict, Any
-
-from dotenv import load_dotenv
 from litellm import completion
-
 from ..state import AgentState, MurphyRiskReport
 
-load_dotenv()
-
-MODEL = os.getenv("LLM_MODEL", "llama3.2:3b")
-API_BASE = os.getenv("OLLAMA_API_BASE", "http://localhost:11434")
-
+MODEL = "ollama/llama3.2:3b"
 
 def murphy_node(state: AgentState) -> Dict[str, Any]:
-    print("[MURPHY] Analyzing risk...")
-
-    print("MODEL =", MODEL)
-    print("API_BASE =", API_BASE)
-
+    print(f"[MURPHY] Analyzing risk...")
+    plan_dict = state.get("plan", {})
     intent = state.get("intent", "")
-    plan = state.get("plan", {})
-
-    system_prompt = """
-You are MURPHY, the risk analysis agent of BRAHMA COS.
-
-Analyze the given plan and identify risks.
-
-Return ONLY a valid JSON object in exactly this format:
-
-{
-  "risk_level": "LOW",
-  "failure_modes": [
-    "failure 1"
-  ],
-  "security_concerns": [
-    "concern 1"
-  ],
-  "recommendation": "your recommendation"
-}
-
-Do not write markdown.
-Do not explain anything.
-Return only the JSON object.
+    
+    system_prompt = f"""You are MURPHY, the adversarial risk simulation agent.
+Your job is to red-team the provided plan and intent. Identify failure modes, edge cases, and security risks.
+You MUST respond with valid JSON matching this schema:
+{MurphyRiskReport.model_json_schema()}
+Do not include any other text, markdown blocks, or chain-of-thought in your response, ONLY the raw JSON object.
 """
-
-    user_prompt = f"""
-Intent:
-{intent}
-
-Plan:
-{json.dumps(plan, indent=2)}
-"""
-
+    user_prompt = f"Intent: {intent}\n\nProposed Plan:\n{json.dumps(plan_dict, indent=2)}"
+    
     try:
-
         response = completion(
             model=MODEL,
-            api_base=API_BASE,
-            response_format={"type": "json_object"},
             messages=[
-                {
-                    "role": "system",
-                    "content": system_prompt,
-                },
-                {
-                    "role": "user",
-                    "content": user_prompt,
-                },
-            ],
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ]
         )
-
         content = response.choices[0].message.content
-
-        print("========== RAW RESPONSE ==========")
-        print(content)
-        print("==================================")
-
-        risk_obj = MurphyRiskReport.model_validate_json(content)
-
+        
+        if content.startswith("```json"):
+            content = content[7:-3]
+        elif content.startswith("```"):
+            content = content[3:-3]
+            
+        risk_obj = MurphyRiskReport.model_validate_json(content.strip())
         return {
             "current_agent": "MURPHY",
-            "risk_report": risk_obj.model_dump(),
+            "risk_report": risk_obj.model_dump()
         }
-
     except Exception as e:
-
-        print("[MURPHY] Error:", str(e))
-
-        fallback = MurphyRiskReport(
+        print(f"[MURPHY] Error simulating risk: {str(e)}")
+        # Safe failure: Assume high risk if we can't analyze
+        fallback_risk = MurphyRiskReport(
             risk_level="HIGH",
-            failure_modes=[
-                "LLM response parsing failed."
-            ],
-            security_concerns=[
-                "Unable to complete automated risk analysis."
-            ],
-            recommendation="Manual review required."
+            failure_modes=["Unknown - LLM Risk Analysis Failed"],
+            security_concerns=["Cannot guarantee safety due to analysis failure"],
+            recommendation="Block execution and review manually."
         )
-
         return {
             "current_agent": "MURPHY",
-            "risk_report": fallback.model_dump(),
-            "errors": state.get("errors", []) + [str(e)],
+            "risk_report": fallback_risk.model_dump(),
+            "errors": state.get("errors", []) + [f"MURPHY Error: {str(e)}"]
         }

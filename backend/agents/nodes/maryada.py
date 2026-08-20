@@ -1,125 +1,79 @@
-import os
 import json
 from typing import Dict, Any
-
-from dotenv import load_dotenv
 from litellm import completion
-
 from ..state import AgentState, PolicyVerdict
 
-load_dotenv()
-
-MODEL = os.getenv("LLM_MODEL", "llama3.2:3b")
-API_BASE = os.getenv("OLLAMA_API_BASE", "http://localhost:11434")
-
+MODEL = "ollama/llama3.2:3b"
 
 def maryada_node(state: AgentState) -> Dict[str, Any]:
-
-    print("[MARYADA] Applying governance policies...")
-
-    print("MODEL =", MODEL)
-    print("API_BASE =", API_BASE)
-
+    print(f"[MARYADA] Applying governance policies...")
+    plan_dict = state.get("plan", {})
+    risk_dict = state.get("risk_report", {})
     intent = state.get("intent", "")
-    plan = state.get("plan", {})
-    risk = state.get("risk_report", {})
     errors = state.get("errors", [])
-
-    # Fail closed if previous agent failed
+    
+    # If there was a failure upstream, fail closed immediately
     if errors:
-        print("[MARYADA] Upstream errors detected.")
-
+        print("[MARYADA] Upstream errors detected. Failing closed.")
         verdict = PolicyVerdict(
             risk_tier="HIGH",
             approved=False,
             requires_human=True,
-            justification="Errors detected in previous agents."
+            justification=f"Upstream agent errors detected: {', '.join(errors)}"
         )
-
         return {
             "current_agent": "MARYADA",
             "policy_verdict": verdict.model_dump()
         }
 
-    system_prompt = """
-You are MARYADA, the governance and policy agent of BRAHMA COS.
-
-Review the intent, plan and risk report.
-
-Return ONLY a valid JSON object in exactly this format:
-
-{
-  "risk_tier":"LOW",
-  "approved":true,
-  "requires_human":false,
-  "justification":"Reason"
-}
-
-Do not write markdown.
-Do not explain anything.
-Return only JSON.
+    system_prompt = f"""You are MARYADA, the governance and policy gate agent.
+You receive a user's intent, the proposed plan, and a risk report.
+Your job is to apply enterprise policy and generate a Policy Verdict.
+High-risk actions (financial, data deletion, legal) must NOT be approved automatically.
+You MUST respond with valid JSON matching this schema:
+{PolicyVerdict.model_json_schema()}
+Do not include any other text, markdown blocks, or chain-of-thought in your response, ONLY the raw JSON object.
 """
-
-    user_prompt = f"""
-Intent:
-{intent}
-
-Plan:
-{json.dumps(plan, indent=2)}
-
-Risk Report:
-{json.dumps(risk, indent=2)}
-"""
-
+    user_prompt = f"Intent: {intent}\n\nProposed Plan:\n{json.dumps(plan_dict)}\n\nRisk Report:\n{json.dumps(risk_dict)}"
+    
     try:
-
         response = completion(
             model=MODEL,
-            api_base=API_BASE,
-            response_format={"type": "json_object"},
             messages=[
-                {
-                    "role": "system",
-                    "content": system_prompt,
-                },
-                {
-                    "role": "user",
-                    "content": user_prompt,
-                },
-            ],
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ]
         )
-
         content = response.choices[0].message.content
-
-        print("========== RAW RESPONSE ==========")
-        print(content)
-        print("==================================")
-
-        verdict = PolicyVerdict.model_validate_json(content)
-
-        # Never auto approve HIGH risk
-        if verdict.risk_tier.upper() == "HIGH":
-            verdict.approved = False
-            verdict.requires_human = True
-
+        
+        if content.startswith("```json"):
+            content = content[7:-3]
+        elif content.startswith("```"):
+            content = content[3:-3]
+            
+        verdict_obj = PolicyVerdict.model_validate_json(content.strip())
+        
+        # Override to prevent high risk from passing
+        if verdict_obj.risk_tier == "HIGH" and verdict_obj.approved:
+            verdict_obj.approved = False
+            verdict_obj.requires_human = True
+            verdict_obj.justification += " (Overridden: HIGH risk tiers cannot be auto-approved)"
+            
         return {
             "current_agent": "MARYADA",
-            "policy_verdict": verdict.model_dump(),
+            "policy_verdict": verdict_obj.model_dump()
         }
-
     except Exception as e:
-
-        print("[MARYADA] Error:", str(e))
-
-        fallback = PolicyVerdict(
+        print(f"[MARYADA] Error evaluating policy: {str(e)}")
+        # Fail closed
+        fallback_verdict = PolicyVerdict(
             risk_tier="HIGH",
             approved=False,
             requires_human=True,
-            justification="Policy evaluation failed."
+            justification="Policy evaluation failed due to system error."
         )
-
         return {
             "current_agent": "MARYADA",
-            "policy_verdict": fallback.model_dump(),
-            "errors": state.get("errors", []) + [str(e)],
+            "policy_verdict": fallback_verdict.model_dump(),
+            "errors": state.get("errors", []) + [f"MARYADA Error: {str(e)}"]
         }

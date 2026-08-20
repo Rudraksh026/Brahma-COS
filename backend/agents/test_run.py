@@ -2,8 +2,7 @@ import os
 import json
 from .graph import brahma_app
 
-# Optionally set an API key for testing
-# os.environ["OPENAI_API_KEY"] = "sk-..."
+
 
 def run_test(test_name: str, intent: str):
     print(f"\n{'='*50}")
@@ -35,8 +34,7 @@ def run_test(test_name: str, intent: str):
     return final_state
 
 if __name__ == "__main__":
-    if not os.environ.get("OPENAI_API_KEY"):
-        print("WARNING: OPENAI_API_KEY is not set. Testing will likely fallback to error states, which will verify our fail-safe mechanisms!")
+
 
     # Test 1: Normal low-risk task
     # Should be APPROVED and reach RACHIT

@@ -9,7 +9,7 @@ from litellm import completion
 # os.environ["ANTHROPIC_API_KEY"] = "sk-ant-..."
 
 # Default model, change to "gpt-4o" or "claude-3-5-sonnet-20240620" as needed
-MODEL = "gpt-3.5-turbo"
+MODEL = "ollama/llama3.2:3b"
 
 class AgentState(TypedDict):
     task_id: str
