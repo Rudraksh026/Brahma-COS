@@ -1,4 +1,4 @@
-"""Production-safe LiteLLM configuration for BRAHMA COS agents."""
+"""Production-safe LiteLLM configuration for BRAHMA COS."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ except ImportError:  # pragma: no cover
     completion = None
 
 
-DEFAULT_MODEL = "ollama/llama3.2:3b"
+DEFAULT_MODEL = "openrouter/free"
 DEFAULT_OLLAMA_BASE = "http://localhost:11434"
 DEFAULT_OPENROUTER_BASE = "https://openrouter.ai/api/v1"
 
@@ -21,11 +21,11 @@ def get_model() -> str:
 
 
 def is_ollama(model: str) -> bool:
-    return model.startswith("ollama/")
+    return model.lower().startswith("ollama/")
 
 
 def is_openrouter(model: str) -> bool:
-    return model.startswith("openrouter/")
+    return model.lower().startswith("openrouter/")
 
 
 def _base_kwargs(model: str) -> Dict[str, Any]:
@@ -36,23 +36,25 @@ def _base_kwargs(model: str) -> Dict[str, Any]:
     }
 
     if is_ollama(model):
-        kwargs["api_base"] = os.getenv("OLLAMA_API_BASE", DEFAULT_OLLAMA_BASE)
+        kwargs["api_base"] = os.getenv(
+            "OLLAMA_API_BASE", DEFAULT_OLLAMA_BASE
+        )
 
     if is_openrouter(model):
-        # LiteLLM reads OPENROUTER_API_KEY automatically. Keep the explicit
-        # check here so deployment errors are clear instead of mysterious.
-        if not os.getenv("OPENROUTER_API_KEY"):
+        api_key = os.getenv("OPENROUTER_API_KEY", "").strip()
+        if not api_key:
             raise RuntimeError("OPENROUTER_API_KEY is not configured")
-        kwargs["api_base"] = os.getenv("OPENROUTER_API_BASE", DEFAULT_OPENROUTER_BASE)
+        kwargs["api_key"] = api_key
+        kwargs["api_base"] = os.getenv(
+            "OPENROUTER_API_BASE", DEFAULT_OPENROUTER_BASE
+        )
 
-        # Optional attribution headers accepted by OpenRouter.
         site_url = os.getenv("OPENROUTER_SITE_URL", "").strip()
         app_name = os.getenv("OPENROUTER_APP_NAME", "BRAHMA COS").strip()
+        headers = {"X-Title": app_name}
         if site_url:
-            kwargs["extra_headers"] = {
-                "HTTP-Referer": site_url,
-                "X-Title": app_name,
-            }
+            headers["HTTP-Referer"] = site_url
+        kwargs["extra_headers"] = headers
 
     return kwargs
 
@@ -62,10 +64,11 @@ def llm_completion(
     *,
     json_mode: bool = True,
 ) -> Any:
-    """Call the configured LLM with provider-aware settings.
+    """Call the configured provider.
 
-    JSON mode is requested when possible. If the provider rejects the
-    parameter, retry once without it. The caller still validates the output.
+    We intentionally do not force response_format for openrouter/free because
+    the free router can select models with different structured-output support.
+    The agents enforce JSON through prompts plus strict Pydantic validation.
     """
     if completion is None:
         raise RuntimeError("LiteLLM is not installed")
@@ -74,19 +77,9 @@ def llm_completion(
     kwargs = _base_kwargs(model)
     kwargs["messages"] = messages
 
-    if json_mode:
+    # Only request JSON mode when explicitly enabled for a provider known to
+    # support it. openrouter/free is intentionally left prompt-constrained.
+    if json_mode and not is_openrouter(model):
         kwargs["response_format"] = {"type": "json_object"}
 
-    try:
-        return completion(**kwargs)
-    except Exception as first_error:
-        if not json_mode:
-            raise
-
-        # Some OpenAI-compatible providers/models do not accept response_format.
-        # Retry without it, then validate strictly in the calling node.
-        kwargs.pop("response_format", None)
-        try:
-            return completion(**kwargs)
-        except Exception:
-            raise first_error
+    return completion(**kwargs)

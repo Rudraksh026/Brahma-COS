@@ -1,0 +1,3 @@
+langgraph>=1.2,<2
+litellm>=1.90,<2
+pydantic>=2.7,<3

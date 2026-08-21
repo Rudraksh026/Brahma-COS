@@ -1,10 +1,12 @@
 # BRAHMA COS Agents
 
-Production-oriented KARMA → PRAGYA → MURPHY → MARYADA → RACHIT agent graph.
+Production-oriented:
+
+KARMA → PRAGYA → MURPHY → MARYADA → RACHIT
 
 ## Production environment
 
-Set:
+For Render/OpenRouter:
 
 ```env
 LLM_MODEL=openrouter/free
@@ -13,7 +15,7 @@ LLM_TIMEOUT=60
 LLM_TEMPERATURE=0
 ```
 
-`OPENROUTER_API_KEY` must be kept in the hosting provider's secret/environment-variable store and must not be committed to Git.
+Keep the API key only in Render Environment Variables. Never commit it.
 
 ## Local Ollama
 
@@ -22,21 +24,26 @@ LLM_MODEL=ollama/llama3.2:3b
 OLLAMA_API_BASE=http://localhost:11434
 ```
 
-## Behavior
+## Important fixes in this version
 
-- PRAGYA validates an actual plan, not a JSON schema.
-- MURPHY fails closed to HIGH risk if analysis fails.
-- MARYADA has deterministic high-risk guardrails and never auto-approves HIGH/CRITICAL risk.
-- RACHIT executes only when MARYADA explicitly approves and does not require human approval.
-- LLM calls are provider-aware and support OpenRouter and Ollama.
-- Structured responses are parsed defensively, including accidental Markdown fences.
+- LLM model is read from `LLM_MODEL`; no production Ollama hardcoding.
+- OpenRouter API key is passed explicitly.
+- `openrouter/free` does not force `response_format`, because the free router can select models with different structured-output support.
+- PRAGYA, MURPHY, and MARYADA explicitly reject JSON schemas returned by smaller models.
+- Defensive JSON parsing handles markdown fences and safe single-quote fallback.
+- Pydantic validates the final data object.
+- MARYADA has deterministic high-risk guardrails and fails closed.
+- RACHIT executes only after explicit MARYADA approval.
+- HIGH/CRITICAL risk is never automatically approved.
 
-## Test
+## Test locally
 
-From the package's parent directory:
+From the directory containing the `agents` package:
 
 ```bash
 python -m agents.test_run
 ```
 
-The low-risk test requires a working LLM. The high-risk test is blocked by deterministic MARYADA policy even if an LLM is unavailable.
+Expected:
+- LOW-RISK test can complete when OpenRouter is available.
+- HIGH-RISK test is blocked by MARYADA even if the LLM is unavailable.

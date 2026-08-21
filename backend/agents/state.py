@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, TypedDict
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class PragyaPlan(BaseModel):
@@ -18,12 +18,28 @@ class MurphyRiskReport(BaseModel):
     security_concerns: List[str] = Field(default_factory=list)
     recommendation: str = Field(min_length=1)
 
+    @field_validator("risk_level")
+    @classmethod
+    def normalize_risk_level(cls, value: str) -> str:
+        value = value.strip().upper()
+        if value not in {"LOW", "MEDIUM", "HIGH", "CRITICAL"}:
+            raise ValueError("risk_level must be LOW, MEDIUM, HIGH, or CRITICAL")
+        return value
+
 
 class PolicyVerdict(BaseModel):
     risk_tier: str = Field(min_length=1)
     approved: bool
     requires_human: bool
     justification: str = Field(min_length=1)
+
+    @field_validator("risk_tier")
+    @classmethod
+    def normalize_risk_tier(cls, value: str) -> str:
+        value = value.strip().upper()
+        if value not in {"LOW", "MEDIUM", "HIGH", "CRITICAL"}:
+            raise ValueError("risk_tier must be LOW, MEDIUM, HIGH, or CRITICAL")
+        return value
 
 
 class AgentState(TypedDict, total=False):

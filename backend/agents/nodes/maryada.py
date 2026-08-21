@@ -4,7 +4,7 @@ import json
 import re
 from typing import Any, Dict
 
-from ..json_utils import parse_json_object
+from ..json_utils import parse_json_object, reject_schema_object
 from ..llm import get_model, llm_completion
 from ..state import AgentState, PolicyVerdict
 
@@ -49,11 +49,12 @@ def maryada_node(state: AgentState) -> Dict[str, Any]:
     # Deterministic guardrail. Never allow an LLM to approve these classes.
     if _is_deterministically_high_risk(intent):
         verdict = _safe_verdict(
-            "Blocked by deterministic MARYADA policy: the requested action is high-risk and requires human approval."
+            "Blocked by deterministic MARYADA policy: the requested action "
+            "is high-risk and requires human approval."
         )
         return {"current_agent": "MARYADA", "policy_verdict": verdict.model_dump()}
 
-    # Fail closed if an upstream agent failed.
+    # Fail closed if upstream analysis failed.
     if errors:
         verdict = _safe_verdict(
             f"Upstream agent errors detected: {'; '.join(errors)}"
@@ -69,9 +70,17 @@ def maryada_node(state: AgentState) -> Dict[str, Any]:
 
     system_prompt = """
 You are MARYADA, the governance and policy gate of BRAHMA COS.
+
 Apply the proposed plan and MURPHY risk report against a conservative policy.
 
-Return ONLY a valid JSON object with exactly:
+IMPORTANT OUTPUT RULES:
+1. Return ONLY one JSON OBJECT.
+2. Return the DATA itself, NOT a JSON schema.
+3. Do NOT return properties, required, type, $defs, or definitions.
+4. Use double quotes for JSON.
+5. No markdown, commentary, or chain-of-thought.
+
+The JSON object MUST have exactly:
 {
   "risk_tier": "LOW|MEDIUM|HIGH|CRITICAL",
   "approved": true,
@@ -81,11 +90,10 @@ Return ONLY a valid JSON object with exactly:
 
 Policy:
 - Financial transfers, destructive database/data actions, credential/access changes,
-  legal commitments, production deployments, or similarly consequential actions require human approval.
+  legal commitments, production deployments, or similarly consequential actions
+  require human approval.
 - HIGH or CRITICAL risk can never be auto-approved.
 - If uncertain, require human approval.
-- Never return a JSON schema.
-- No markdown, commentary, or chain-of-thought.
 """.strip()
 
     user_prompt = (
@@ -103,29 +111,34 @@ Policy:
             ],
             json_mode=True,
         )
-        parsed = parse_json_object(response.choices[0].message.content)
-
-        if "properties" in parsed and "risk_tier" not in parsed:
-            raise ValueError("MARYADA returned the JSON schema instead of a policy verdict")
+        content = response.choices[0].message.content or ""
+        parsed = parse_json_object(content)
+        reject_schema_object(parsed, "MARYADA")
 
         verdict = PolicyVerdict.model_validate(parsed)
-        verdict.risk_tier = verdict.risk_tier.upper()
 
         # Final deterministic override.
         if verdict.risk_tier in {"HIGH", "CRITICAL"}:
             verdict.approved = False
             verdict.requires_human = True
-            verdict.justification += " MARYADA override: high-risk tiers require human approval."
+            verdict.justification += (
+                " MARYADA override: high-risk tiers require human approval."
+            )
 
         if verdict.requires_human:
             verdict.approved = False
 
-        return {"current_agent": "MARYADA", "policy_verdict": verdict.model_dump()}
+        return {
+            "current_agent": "MARYADA",
+            "policy_verdict": verdict.model_dump(),
+        }
 
     except Exception as exc:
         message = f"MARYADA Error: {exc}"
         print(f"[MARYADA] {message}")
-        verdict = _safe_verdict("Policy evaluation failed due to a system error; execution is blocked.")
+        verdict = _safe_verdict(
+            "Policy evaluation failed due to a system error; execution is blocked."
+        )
         return {
             "current_agent": "MARYADA",
             "policy_verdict": verdict.model_dump(),
