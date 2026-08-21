@@ -1,15 +1,14 @@
-from typing import Dict, Any
+from __future__ import annotations
+
+from typing import Any, Dict
+
 from ..state import AgentState
 
+
 def karma_node(state: AgentState) -> Dict[str, Any]:
-    """
-    KARMA Orchestrator:
-    Parses intent and initializes the workflow. For the MVP, it routes everything 
-    to PRAGYA for reasoning, but sets up the tracing and context.
-    """
-    print(f"[KARMA] Orchestrator activated for Task: {state.get('task_id')}")
-    print(f"[KARMA] Analyzing Intent: {state.get('intent')}")
-    
-    # In a full version, KARMA would decide if it needs RAG (KOSH) first.
-    # For MVP, we route straight to PRAGYA.
+    """Initialize a trace and route the task into the reasoning pipeline."""
+    task_id = state.get("task_id", "unknown")
+    intent = (state.get("intent") or "").strip()
+    print(f"[KARMA] Orchestrator activated for Task: {task_id}")
+    print(f"[KARMA] Intent: {intent}")
     return {"current_agent": "KARMA"}

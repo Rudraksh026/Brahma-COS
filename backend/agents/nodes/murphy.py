@@ -1,59 +1,72 @@
+from __future__ import annotations
+
 import json
-from typing import Dict, Any
-try:
-    from litellm import completion
-except ImportError:
-    completion = None
+from typing import Any, Dict
+
+from ..json_utils import parse_json_object
+from ..llm import get_model, llm_completion
 from ..state import AgentState, MurphyRiskReport
 
-MODEL = "ollama/llama3.2:3b"
 
 def murphy_node(state: AgentState) -> Dict[str, Any]:
-    print(f"[MURPHY] Analyzing risk...")
-    plan_dict = state.get("plan", {})
-    intent = state.get("intent", "")
-    
-    system_prompt = f"""You are MURPHY, the adversarial risk simulation agent.
-Your job is to red-team the provided plan and intent. Identify failure modes, edge cases, and security risks.
-You MUST respond with valid JSON matching this schema:
-{MurphyRiskReport.model_json_schema()}
-Do not include any other text, markdown blocks, or chain-of-thought in your response, ONLY the raw JSON object.
-"""
-    user_prompt = f"Intent: {intent}\n\nProposed Plan:\n{json.dumps(plan_dict, indent=2)}"
-    
+    print("[MURPHY] Analyzing risk...")
+    plan_dict = state.get("plan") or {}
+    intent = (state.get("intent") or "").strip()
+
+    system_prompt = """
+You are MURPHY, the adversarial risk simulation agent of BRAHMA COS.
+Red-team the user's intent and proposed plan. Identify failure modes,
+security/privacy concerns, and the safest recommendation.
+
+Return ONLY a valid JSON object with exactly these fields:
+{
+  "risk_level": "LOW|MEDIUM|HIGH|CRITICAL",
+  "failure_modes": ["..."],
+  "security_concerns": ["..."],
+  "recommendation": "..."
+}
+
+Rules:
+- Return the actual risk report, never a JSON schema.
+- Never output properties, required, type, or definitions.
+- Use valid double-quoted JSON.
+- No markdown, commentary, or chain-of-thought.
+""".strip()
+
+    user_prompt = (
+        f"Intent: {intent}\n\n"
+        f"Proposed Plan:\n{json.dumps(plan_dict, indent=2)}"
+    )
+
     try:
-        if completion is None:
-            raise RuntimeError("LiteLLM is not installed")
-        response = completion(
-            model=MODEL,
-            messages=[
+        print(f"[MURPHY] Using model: {get_model()}")
+        response = llm_completion(
+            [
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
-            ]
+                {"role": "user", "content": user_prompt},
+            ],
+            json_mode=True,
         )
-        content = response.choices[0].message.content
-        
-        if content.startswith("```json"):
-            content = content[7:-3]
-        elif content.startswith("```"):
-            content = content[3:-3]
-            
-        risk_obj = MurphyRiskReport.model_validate_json(content.strip())
-        return {
-            "current_agent": "MURPHY",
-            "risk_report": risk_obj.model_dump()
-        }
-    except Exception as e:
-        print(f"[MURPHY] Error simulating risk: {str(e)}")
-        # Safe failure: Assume high risk if we can't analyze
-        fallback_risk = MurphyRiskReport(
+        parsed = parse_json_object(response.choices[0].message.content)
+
+        if "properties" in parsed and "risk_level" not in parsed:
+            raise ValueError("MURPHY returned the JSON schema instead of a risk report")
+
+        risk = MurphyRiskReport.model_validate(parsed)
+        risk.risk_level = risk.risk_level.upper()
+        return {"current_agent": "MURPHY", "risk_report": risk.model_dump()}
+
+    except Exception as exc:
+        message = f"MURPHY Error: {exc}"
+        print(f"[MURPHY] {message}")
+        fallback = MurphyRiskReport(
             risk_level="HIGH",
-            failure_modes=["Unknown - LLM Risk Analysis Failed"],
-            security_concerns=["Cannot guarantee safety due to analysis failure"],
-            recommendation="Block execution and review manually."
+            failure_modes=["Risk analysis could not be completed."],
+            security_concerns=["Safety cannot be guaranteed because risk analysis failed."],
+            recommendation="Block execution and review manually.",
         )
         return {
             "current_agent": "MURPHY",
-            "risk_report": fallback_risk.model_dump(),
-            "errors": state.get("errors", []) + [f"MURPHY Error: {str(e)}"]
+            "risk_report": fallback.model_dump(),
+            "errors": state.get("errors", []) + [message],
         }

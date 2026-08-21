@@ -14,6 +14,8 @@ __pycache__/
 
 # Uploads
 backend/app/uploads/
+backend/agents_local
+backend/agents.zip
 
 # VS Code / IDE
 .vscode/
