@@ -8,23 +8,17 @@ export function RiskReview({ report }: { report: RiskReport }) {
       <CardHeader>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <CardTitle>Risk Review</CardTitle>
-          <RiskBadge level={report.riskLevel} />
+          <RiskBadge level={report.risk_level} />
         </div>
       </CardHeader>
       <CardContent className="space-y-5">
-        <div>
-          <p className="text-xs font-semibold uppercase text-muted-foreground">
-            Category
-          </p>
-          <p className="mt-1 text-sm">{report.category}</p>
-        </div>
         <div className="grid gap-5 md:grid-cols-2">
           <div>
             <p className="text-xs font-semibold uppercase text-muted-foreground">
               Failure Modes
             </p>
             <ul className="mt-2 space-y-2 text-sm text-muted-foreground">
-              {report.failureModes.map((item) => (
+              {report.failure_modes.map((item) => (
                 <li key={item} className="leading-6">
                   {item}
                 </li>
@@ -36,7 +30,7 @@ export function RiskReview({ report }: { report: RiskReport }) {
               Security Concerns
             </p>
             <ul className="mt-2 space-y-2 text-sm text-muted-foreground">
-              {report.securityConcerns.map((item) => (
+              {report.security_concerns.map((item) => (
                 <li key={item} className="leading-6">
                   {item}
                 </li>
