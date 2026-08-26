@@ -14,6 +14,8 @@ from app.api.routes.upload import router as upload_router
 from app.api.routes.memory import router as memory_router
 from app.api.routes.audit import router as audit_router
 from app.api.routes.agents import router as agents_router
+from app.api.routes.auth import router as auth_router
+from app.models.user import User
 
 
 # Create database tables
@@ -59,6 +61,7 @@ app.include_router(upload_router)
 app.include_router(memory_router)
 app.include_router(audit_router)
 app.include_router(agents_router)
+app.include_router(auth_router)
 
 
 @app.get("/")

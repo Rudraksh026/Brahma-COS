@@ -70,3 +70,50 @@ Founder → Next.js → FastAPI → KOSH/SMRITI → KARMA → PRAGYA → MURPHY 
 - If Ollama is unavailable, the agent workflow fails closed. Knowledge uploads without embeddings are reported as skipped instead of pretending that semantic retrieval succeeded.
 - The MVP keeps RACHIT execution simulated.
 - Human approval for blocked tasks is exposed through `/tasks/{id}/approve` and `/tasks/{id}/reject`.
+
+## New production task implementation
+
+### Dashboard
+- Live polling every 15 seconds
+- Loading skeletons and explicit empty states
+- Live connection/error states
+- Risk-aware green/amber/red stat cards
+- Change highlights and subtle motion
+- Production/live session labeling instead of the old local UI badge
+
+### Authentication
+- Separate `/login` and `/signup` flows
+- Real FastAPI authentication calls
+- Signed expiring access tokens
+- Server-side `/auth/me` session validation
+- Automatic token refresh every 45 minutes while the workspace is open
+- Logout clears the live session
+- Forgot/reset password flow
+- Email verification flow
+
+### SMTP
+Configure these backend environment variables on Render:
+
+```env
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USERNAME=your-smtp-user
+SMTP_PASSWORD=your-smtp-app-password
+SMTP_FROM=your-sender@example.com
+ALERT_EMAIL=founder@example.com
+```
+
+Also configure:
+
+```env
+FRONTEND_ORIGIN=https://brahma-cos.vercel.app
+AUTH_SECRET=<long-random-secret>
+AUTH_TOKEN_TTL_MINUTES=60
+```
+
+SMTP events are wired for account verification, password reset, high-risk/approval-required tasks, and successful Founder approvals. If SMTP is not configured, the backend safely logs that email delivery was skipped rather than failing the task workflow.
+
+### Vercel
+```env
+NEXT_PUBLIC_API_URL=https://brahma-cos.onrender.com
+```

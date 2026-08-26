@@ -4,6 +4,7 @@ from app.schemas.task import TaskCreate
 from app.services.agent_service import run_agent
 from app.services.audit_service import audit_service
 from agents.nodes.rachit import rachit_node
+from app.services.email_service import send_event_email
 
 def _audit(db, task_id, agent, action, status="success", event="", details=""):
     try: audit_service.create(db, task_id, agent, action, status, event, details)
@@ -30,6 +31,10 @@ def create_task(db: Session, task: TaskCreate):
         else:
             db_task.status="COMPLETED"; db_task.current_agent="RACHIT" if db_task.execution_result else "MARYADA"
         db_task.errors=result.get("errors",[]); db_task.trace=trace
+        if db_task.risk_level in ("HIGH", "CRITICAL") or (verdict and not verdict.get("approved")):
+            justification = (db_task.policy_verdict or {}).get("justification", "Human approval required.")
+            body = f"Task #{db_task.id} requires Founder review.\nRisk: {db_task.risk_level}\n\n{justification}"
+            send_event_email(f"BRAHMA COS approval required: {db_task.title}", body)
     except Exception as e:
         db_task.status="FAILED"; db_task.errors=[str(e)]; _audit(db,db_task.id,"SYSTEM","execution","failed","Task failed",str(e))
     db.commit(); db.refresh(db_task); return db_task
@@ -52,7 +57,7 @@ def approve_task(db,task_id):
         _audit(db,task.id,"RACHIT","execute","success","Execution complete",str(task.execution_result))
     except Exception as e:
         task.status="FAILED"; task.errors=list(task.errors or [])+[str(e)]; _audit(db,task.id,"RACHIT","execute","failed","Execution failed",str(e))
-    db.commit(); db.refresh(task); return task
+    db.commit(); db.refresh(task); send_event_email(f"BRAHMA COS task approved: {task.title}", f"Task #{task.id} was approved and execution completed by RACHIT."); return task
 
 def reject_task(db,task_id):
     task=get_task(db,task_id)

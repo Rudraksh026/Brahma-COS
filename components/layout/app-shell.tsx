@@ -42,7 +42,28 @@ const routeTitles = [
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  useEffect(() => { if (!window.localStorage.getItem("brahma_session")) router.replace("/login"); }, [router]);
+  const [user, setUser] = useState<{name?: string; email?: string} | null>(null);
+  useEffect(() => {
+    let alive = true;
+    const validate = async () => {
+      const token = window.localStorage.getItem("brahma_access_token");
+      if (!token) { router.replace("/login"); return; }
+      try {
+        const { default: api } = await import("@/lib/api");
+        const { data } = await api.get("/auth/me");
+        if (alive) { setUser(data); window.localStorage.setItem("brahma_user", JSON.stringify(data)); }
+      } catch {
+        window.localStorage.removeItem("brahma_access_token");
+        window.localStorage.removeItem("brahma_user");
+        router.replace("/login");
+      }
+    };
+    validate();
+    const id = window.setInterval(async () => {
+      try { const { default: api } = await import("@/lib/api"); const { data } = await api.post("/auth/refresh"); window.localStorage.setItem("brahma_access_token", data.access_token); window.localStorage.setItem("brahma_user", JSON.stringify(data.user)); if (alive) setUser(data.user); } catch {}
+    }, 45 * 60 * 1000);
+    return () => { alive = false; window.clearInterval(id); };
+  }, [router]);
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -121,14 +142,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               >
                 <Bell className="h-5 w-5" aria-hidden="true" />
               </Button>
-              <Button variant="outline" size="sm" onClick={() => { window.localStorage.removeItem("brahma_session"); router.push("/login"); }}>Logout</Button>
+              <Button variant="outline" size="sm" onClick={() => { window.localStorage.removeItem("brahma_access_token"); window.localStorage.removeItem("brahma_user"); router.push("/login"); }}>Logout</Button>
               <div className="hidden items-center gap-3 rounded-md border bg-card px-3 py-2 sm:flex">
                 <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-xs font-semibold text-primary-foreground">
                   FC
                 </div>
                 <div className="leading-tight">
-                  <p className="text-sm font-medium">Founder</p>
-                  <p className="text-xs text-muted-foreground">Local UI mode</p>
+                  <p className="text-sm font-medium">{user?.name || "Founder"}</p>
+                  <p className="text-xs text-muted-foreground">Live session</p>
                 </div>
               </div>
             </div>
@@ -222,11 +243,11 @@ function SidebarContent({
           )}
         >
           <p className="text-xs font-medium text-muted-foreground">
-            {collapsed ? "UI" : "Frontend-only prototype"}
+            {collapsed ? "LIVE" : "Production control plane"}
           </p>
           {!collapsed ? (
             <p className="mt-1 text-xs text-muted-foreground">
-              Live APIs, agent workflow, memory and audit.
+              Live APIs, agent workflow, memory and audit connected.
             </p>
           ) : null}
         </div>
