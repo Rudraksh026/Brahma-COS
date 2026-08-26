@@ -7,6 +7,7 @@ from app.models.task import Base
 from app.models.knowledge import Knowledge
 from app.models.memory import Memory
 from app.models.audit import Audit
+from app.models.user import User
 
 from app.api.routes.tasks import router as task_router
 from app.api.routes.chat import router as chat_router
@@ -15,7 +16,6 @@ from app.api.routes.memory import router as memory_router
 from app.api.routes.audit import router as audit_router
 from app.api.routes.agents import router as agents_router
 from app.api.routes.auth import router as auth_router
-from app.models.user import User
 
 
 # Create database tables
@@ -36,11 +36,11 @@ origins = [
     "https://brahma-cos.vercel.app",
 ]
 
-# Optional frontend origin from environment variable
 frontend_origin = os.getenv("FRONTEND_ORIGIN")
 
 if frontend_origin:
-    frontend_origin = frontend_origin.rstrip("/")
+    frontend_origin = frontend_origin.strip().rstrip("/")
+
     if frontend_origin not in origins:
         origins.append(frontend_origin)
 
