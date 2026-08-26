@@ -4,13 +4,12 @@ node_modules/
 
 # Environment
 .env
-backend/.env
-
-.env
 .env.local
 .env.*.local
+backend/.env
 
 # Python
+backend/.venv/
 backend/venv/
 venv/
 __pycache__/
@@ -18,7 +17,7 @@ __pycache__/
 
 # Uploads
 backend/app/uploads/
-backend/agents_local
+backend/agents_local/
 backend/agents.zip
 
 # VS Code / IDE
