@@ -1,31 +1,35 @@
 # Node
 node_modules/
 .next/
+out/
 
 # Environment
 .env
-backend/.env
-
-.env
 .env.local
 .env.*.local
+!.env.example
 
 # Python
 backend/.venv/
 backend/venv/
 venv/
 __pycache__/
-*.pyc
+*.py[cod]
 
-# Uploads
+# Python tooling
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Uploads / generated files
 backend/app/uploads/
-backend/agents_local
+backend/agents_local/
 backend/agents.zip
 
-# VS Code / IDE
+# IDE
 .vscode/
 .idea/
 
-# Windows
+# OS
 Thumbs.db
 .DS_Store
